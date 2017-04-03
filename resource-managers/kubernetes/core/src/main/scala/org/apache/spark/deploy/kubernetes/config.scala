@@ -271,6 +271,27 @@ package object config extends Logging {
       .stringConf
       .createOptional
 
+  private[spark] val KUBERNETES_SHUFFLE_NAMESPACE =
+    ConfigBuilder("spark.kubernetes.shuffle.namespace")
+      .doc("Namespace of the shuffle service")
+      .internal()
+      .stringConf
+      .createOptional
+
+  private[spark] val KUBERNETES_SHUFFLE_LABELS =
+    ConfigBuilder("spark.kubernetes.shuffle.labels")
+      .doc("Labels to identify the shuffle service")
+      .internal()
+      .stringConf
+      .createOptional
+
+  private[spark] val KUBERNETES_SHUFFLE_DIR =
+    ConfigBuilder("spark.kubernetes.shuffle.dir")
+      .doc("Path to the shared shuffle directory.")
+      .internal()
+      .stringConf
+      .createOptional
+
   private[spark] val DRIVER_SERVICE_MANAGER_TYPE =
     ConfigBuilder("spark.kubernetes.driver.serviceManagerType")
       .doc("A tag indicating which class to use for creating the Kubernetes service and" +

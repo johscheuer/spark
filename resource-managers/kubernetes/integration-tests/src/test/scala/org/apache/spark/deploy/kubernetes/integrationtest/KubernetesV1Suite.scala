@@ -16,6 +16,8 @@
  */
 package org.apache.spark.deploy.kubernetes.integrationtest
 
+import java.io.FileInputStream
+import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
@@ -23,6 +25,7 @@ import scala.collection.JavaConverters._
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.SettableFuture
 import io.fabric8.kubernetes.api.model.Pod
+import io.fabric8.kubernetes.api.model.extensions.DaemonSet
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
 import org.scalatest.{BeforeAndAfter, DoNotDiscover}
@@ -81,6 +84,28 @@ private[spark] class KubernetesV1Suite(testBackend: IntegrationTestBackend)
     })
   }
 
+  private def createShuffleServiceDaemonSet(): Unit = {
+    val SHUFFLE_SERVICE_YAML = Paths.get("src", "test", "resources",
+      "kubernetes-shuffle-service.yaml")
+    val resList = kubernetesTestComponents.kubernetesClient.load(
+      new FileInputStream(SHUFFLE_SERVICE_YAML.toFile)).get()
+    assert(!resList.isEmpty())
+    assert(resList.get(0).isInstanceOf[DaemonSet])
+    val ds = kubernetesTestComponents.kubernetesClient.extensions().daemonSets()
+      .create(resList.get(0).asInstanceOf[DaemonSet])
+
+    // wait for daemonset to become available.
+    Eventually.eventually(KubernetesSuite.TIMEOUT, KubernetesSuite.INTERVAL) {
+      val pods = kubernetesTestComponents.kubernetesClient.pods()
+        .withLabel("app", "spark-shuffle-service").list().getItems()
+
+      if (pods.size() == 0 || pods.get(0).getStatus.getConditions.asScala
+        .toList.exists(cond => cond.getType == "Ready" && cond.getStatus != "True")) {
+        throw KubernetesSuite.ShuffleNotReadyException()
+      }
+    }
+  }
+
   private def getSparkMetricsService(sparkBaseAppName: String): SparkRestApiV1 = {
     val serviceName = kubernetesTestComponents.kubernetesClient.services()
       .withLabel("spark-app-name", sparkBaseAppName)
@@ -112,6 +137,29 @@ private[spark] class KubernetesV1Suite(testBackend: IntegrationTestBackend)
       val result = sparkMetricsService.getStages(
         apps.head.id, Seq(StageStatus.COMPLETE).asJava)
       assert(result.size == 1)
+      result
+    }
+  }
+
+  private def expectationsForDynamicAllocation(sparkMetricsService: SparkRestApiV1): Unit = {
+    val apps = Eventually.eventually(KubernetesSuite.TIMEOUT, KubernetesSuite.INTERVAL) {
+      val result = sparkMetricsService
+        .getApplications(ImmutableList.of(ApplicationStatus.RUNNING, ApplicationStatus.COMPLETED))
+      assert(result.size == 1
+        && !result.head.id.equalsIgnoreCase("appid")
+        && !result.head.id.equalsIgnoreCase("{appId}"))
+      result
+    }
+    Eventually.eventually(KubernetesSuite.TIMEOUT, KubernetesSuite.INTERVAL) {
+      val result = sparkMetricsService.getExecutors(apps.head.id)
+      assert(result.size == 4)
+      assert(result.count(exec => exec.id != "driver") == 3)
+      result
+    }
+    Eventually.eventually(KubernetesSuite.TIMEOUT, KubernetesSuite.INTERVAL) {
+      val result = sparkMetricsService.getStages(
+        apps.head.id, Seq(StageStatus.COMPLETE).asJava)
+      assert(result.size == 2)
       result
     }
   }
@@ -315,6 +363,23 @@ private[spark] class KubernetesV1Suite(testBackend: IntegrationTestBackend)
       appArgs = Array.empty[String]).run()
     val sparkMetricsService = getSparkMetricsService("spark-pi")
     expectationsForStaticAllocation(sparkMetricsService)
+  }
+
+  test("Dynamic executor scaling basic test") {
+    createShuffleServiceDaemonSet()
+
+    sparkConf.set("spark.dynamicAllocation.enabled", "true")
+    sparkConf.set("spark.shuffle.service.enabled", "true")
+    sparkConf.set("spark.dynamicAllocation.maxExecutors", "3")
+    sparkConf.set("spark.app.name", "group-by-test")
+
+    new Client(
+      sparkConf = sparkConf,
+      mainClass = KubernetesSuite.GROUP_BY_MAIN_CLASS,
+      mainAppResource = KubernetesSuite.SUBMITTER_LOCAL_MAIN_APP_RESOURCE,
+      appArgs = Array.empty[String]).run()
+    val sparkMetricsService = getSparkMetricsService("spark-pi")
+    expectationsForDynamicAllocation(sparkMetricsService)
   }
 
 }

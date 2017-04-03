@@ -1,0 +1,23 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  labels:
+    app: spark-shuffle-service
+    version: 2.1.0
+  name: shuffle
+spec:
+  template:
+    metadata:
+      labels:
+        app: spark-shuffle-service
+    spec:
+      volumes:
+        - name: temp-volume
+          hostPath:
+            path: '/tmp'
+      containers:
+        - name: shuffle
+          image: kubespark/spark-shuffle:pre-alpha.1
+          volumeMounts:
+            - mountPath: '/tmp'
+              name: temp-volume

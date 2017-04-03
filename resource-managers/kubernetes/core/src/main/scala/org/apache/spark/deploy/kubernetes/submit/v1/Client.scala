@@ -109,7 +109,8 @@ private[spark] class Client(
         s" is a directory.")
     }
     val driverServiceManager = getDriverServiceManager
-    val parsedCustomLabels = parseKeyValuePairs(customLabels, KUBERNETES_DRIVER_LABELS.key,
+
+    val parsedCustomLabels = Util.parseKeyValuePairs(customLabels, KUBERNETES_DRIVER_LABELS.key,
       "labels")
     parsedCustomLabels.keys.foreach { key =>
       require(key != SPARK_APP_ID_LABEL, "Label with key" +
@@ -117,7 +118,7 @@ private[spark] class Client(
         " spark.kubernetes.driver.labels, as it is reserved for Spark's" +
         " internal configuration.")
     }
-    val parsedCustomAnnotations = parseKeyValuePairs(
+    val parsedCustomAnnotations = Util.parseKeyValuePairs(
       customAnnotations,
       KUBERNETES_DRIVER_ANNOTATIONS.key,
       "annotations")
@@ -681,24 +682,6 @@ private[spark] class Client(
         .driverSubmitClientTrustManager
         .orNull,
       connectTimeoutMillis = 5000)
-  }
-
-  private def parseKeyValuePairs(
-      maybeKeyValues: Option[String],
-      configKey: String,
-      keyValueType: String): Map[String, String] = {
-    maybeKeyValues.map(keyValues => {
-      keyValues.split(",").map(_.trim).filterNot(_.isEmpty).map(keyValue => {
-        keyValue.split("=", 2).toSeq match {
-          case Seq(k, v) =>
-            (k, v)
-          case _ =>
-            throw new SparkException(s"Custom $keyValueType set by $configKey must be a" +
-              s" comma-separated list of key-value pairs, with format <key>=<value>." +
-              s" Got value: $keyValue. All values: $keyValues")
-        }
-      }).toMap
-    }).getOrElse(Map.empty[String, String])
   }
 
   private def getDriverServiceManager: DriverServiceManager = {
