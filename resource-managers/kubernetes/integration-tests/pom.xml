@@ -195,6 +195,26 @@
               </artifactItems>
             </configuration>
           </execution>
+          <execution>
+            <id>unpack-docker-shuffle-bundle</id>
+            <phase>pre-integration-test</phase>
+            <goals>
+              <goal>unpack</goal>
+            </goals>
+            <configuration>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>org.apache.spark</groupId>
+                  <artifactId>spark-docker-minimal-bundle_${scala.binary.version}</artifactId>
+                  <version>${project.version}</version>
+                  <classifier>shuffle-docker-dist</classifier>
+                  <type>tar.gz</type>
+                  <overWrite>true</overWrite>
+                  <outputDirectory>${project.build.directory}/docker/shuffle</outputDirectory>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       <plugin>

@@ -27,9 +27,9 @@ object GroupByTest {
       .appName("GroupBy Test")
       .getOrCreate()
 
-    val numMappers = if (args.length > 0) args(0).toInt else 5
+    val numMappers = if (args.length > 0) args(0).toInt else 10
     val numKVPairs = if (args.length > 1) args(1).toInt else 100000
-    val valSize = if (args.length > 2) args(2).toInt else 1000
+    val valSize = if (args.length > 2) args(2).toInt else 2
     val numReducers = if (args.length > 3) args(3).toInt else numMappers
 
     val pairs1 = spark.sparkContext.parallelize(0 until numMappers, numMappers).flatMap { p =>
@@ -45,9 +45,10 @@ object GroupByTest {
     // Enforce that everything has been calculated and in cache
     pairs1.count()
 
+    // scalastyle:off println
     println(pairs1.groupByKey(numReducers).count())
-
+    // scalastyle:on println
     spark.stop()
   }
 }
-// scalastyle:on println
+

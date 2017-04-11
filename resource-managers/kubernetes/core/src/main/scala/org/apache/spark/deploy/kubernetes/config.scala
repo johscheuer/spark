@@ -276,6 +276,13 @@ package object config extends Logging {
       .doc("Namespace of the shuffle service")
       .internal()
       .stringConf
+      .createWithDefault("default")
+
+  private[spark] val KUBERNETES_SHUFFLE_SVC_IP =
+    ConfigBuilder("spark.kubernetes.shuffle.ip")
+      .doc("ip of the shuffle service (debug only)")
+      .internal()
+      .stringConf
       .createOptional
 
   private[spark] val KUBERNETES_SHUFFLE_LABELS =
@@ -287,7 +294,7 @@ package object config extends Logging {
 
   private[spark] val KUBERNETES_SHUFFLE_DIR =
     ConfigBuilder("spark.kubernetes.shuffle.dir")
-      .doc("Path to the shared shuffle directory.")
+      .doc("Path to the shared shuffle directories.")
       .internal()
       .stringConf
       .createOptional
