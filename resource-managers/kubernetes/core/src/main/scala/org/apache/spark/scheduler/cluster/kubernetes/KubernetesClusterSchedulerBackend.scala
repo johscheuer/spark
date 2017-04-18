@@ -36,8 +36,8 @@ import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
 import org.apache.spark.util.{ThreadUtils, Utils}
 
 private[spark] class KubernetesClusterSchedulerBackend(
-      scheduler: TaskSchedulerImpl,
-      val sc: SparkContext)
+    scheduler: TaskSchedulerImpl,
+    val sc: SparkContext)
   extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv) {
 
   import KubernetesClusterSchedulerBackend._
@@ -57,8 +57,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
       throw new SparkException("Must specify the driver pod name"))
 
   case class ShuffleServiceConfig(shuffleNamespace: String,
-                                  shuffleLabels: Map[String, String],
-                                  shuffleDirs: Seq[String])
+    shuffleLabels: Map[String, String],
+    shuffleDirs: Seq[String])
 
   def readShuffleServiceConfig(): Option[ShuffleServiceConfig] = {
     Utils.isDynamicAllocationEnabled(sc.conf) match {
@@ -227,49 +227,49 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
     val basePodBuilder = new PodBuilder()
       .withNewMetadata()
-        .withName(name)
-        .withLabels(selectors)
-        .withOwnerReferences()
-          .addNewOwnerReference()
-          .withController(true)
-          .withApiVersion(driverPod.getApiVersion)
-          .withKind(driverPod.getKind)
-          .withName(driverPod.getMetadata.getName)
-          .withUid(driverPod.getMetadata.getUid)
-        .endOwnerReference()
+      .withName(name)
+      .withLabels(selectors)
+      .withOwnerReferences()
+      .addNewOwnerReference()
+      .withController(true)
+      .withApiVersion(driverPod.getApiVersion)
+      .withKind(driverPod.getKind)
+      .withName(driverPod.getMetadata.getName)
+      .withUid(driverPod.getMetadata.getUid)
+      .endOwnerReference()
       .endMetadata()
       .withNewSpec()
-        .withHostname(hostname)
-        .addNewContainer()
-          .withName(s"executor")
-          .withImage(executorDockerImage)
-          .withImagePullPolicy("IfNotPresent")
-          .withNewResources()
-            .addToRequests("memory", executorMemoryQuantity)
-            .addToLimits("memory", executorMemoryLimitQuantity)
-            .addToRequests("cpu", executorCpuQuantity)
-            .addToLimits("cpu", executorCpuQuantity)
-          .endResources()
-          .withEnv(requiredEnv.asJava)
-          .withPorts(requiredPorts.asJava)
-        .endContainer()
+      .withHostname(hostname)
+      .addNewContainer()
+      .withName(s"executor")
+      .withImage(executorDockerImage)
+      .withImagePullPolicy("IfNotPresent")
+      .withNewResources()
+      .addToRequests("memory", executorMemoryQuantity)
+      .addToLimits("memory", executorMemoryLimitQuantity)
+      .addToRequests("cpu", executorCpuQuantity)
+      .addToLimits("cpu", executorCpuQuantity)
+      .endResources()
+      .withEnv(requiredEnv.asJava)
+      .withPorts(requiredPorts.asJava)
+      .endContainer()
       .endSpec()
 
     var resolvedPodBuilder = shuffleServiceConfig.map { config =>
       config.shuffleDirs.foldLeft(basePodBuilder) { (builder, dir) =>
         builder.editSpec()
           .addNewVolume()
-            .withName(FilenameUtils.getBaseName(dir))
-            .withNewHostPath().withPath(dir)
-            .endHostPath()
+          .withName(FilenameUtils.getBaseName(dir))
+          .withNewHostPath().withPath(dir)
+          .endHostPath()
           .endVolume()
           .editFirstContainer()
-            .addNewVolumeMount()
-            .withName(FilenameUtils.getBaseName(dir))
-            .withMountPath(dir)
-            .endVolumeMount()
+          .addNewVolumeMount()
+          .withName(FilenameUtils.getBaseName(dir))
+          .withMountPath(dir)
+          .endVolumeMount()
           .endContainer()
-        .endSpec()
+          .endSpec()
       }
     }.getOrElse(basePodBuilder)
 

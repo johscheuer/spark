@@ -21,8 +21,9 @@ import org.apache.spark.SparkException
 
 object Util {
   def parseKeyValuePairs(maybeKeyValues: Option[String],
-                         configKey: String,
-                         keyValueType: String): Map[String, String] = {
+    configKey: String,
+    keyValueType: String): Map[String, String] = {
+
     maybeKeyValues.map(keyValues => {
       keyValues.split(",").map(_.trim).filterNot(_.isEmpty).map(keyValue => {
         keyValue.split("=", 2).toSeq match {
