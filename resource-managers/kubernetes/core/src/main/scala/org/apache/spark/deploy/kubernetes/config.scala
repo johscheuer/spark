@@ -157,6 +157,13 @@ package object config extends Logging {
       .stringConf
       .createOptional
 
+  private[spark] val SPARK_SHUFFLE_SERVICE_HOST =
+    ConfigBuilder("spark.shuffle.service.host")
+      .doc("Host for Spark Shuffle Service")
+      .internal()
+      .stringConf
+      .createOptional
+
   // Note that while we set a default for this when we start up the
   // scheduler, the specific default value is dynamically determined
   // based on the executor memory.
@@ -274,28 +281,26 @@ package object config extends Logging {
   private[spark] val KUBERNETES_SHUFFLE_NAMESPACE =
     ConfigBuilder("spark.kubernetes.shuffle.namespace")
       .doc("Namespace of the shuffle service")
-      .internal()
       .stringConf
       .createWithDefault("default")
 
   private[spark] val KUBERNETES_SHUFFLE_SVC_IP =
     ConfigBuilder("spark.kubernetes.shuffle.ip")
-      .doc("ip of the shuffle service (debug only)")
-      .internal()
+      .doc("This setting is for debugging only. Setting this " +
+        "allows overriding the IP that the executor thinks its colocated " +
+        "shuffle service is on")
       .stringConf
       .createOptional
 
   private[spark] val KUBERNETES_SHUFFLE_LABELS =
     ConfigBuilder("spark.kubernetes.shuffle.labels")
       .doc("Labels to identify the shuffle service")
-      .internal()
       .stringConf
       .createOptional
 
   private[spark] val KUBERNETES_SHUFFLE_DIR =
     ConfigBuilder("spark.kubernetes.shuffle.dir")
       .doc("Path to the shared shuffle directories.")
-      .internal()
       .stringConf
       .createOptional
 

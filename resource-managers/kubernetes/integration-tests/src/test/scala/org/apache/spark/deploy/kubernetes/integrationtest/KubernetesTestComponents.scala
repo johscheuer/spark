@@ -26,6 +26,8 @@ import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import io.fabric8.kubernetes.client.internal.SSLUtils
 import org.scalatest.concurrent.Eventually
 
+import org.scalatest.concurrent.Eventually
+
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.rest.kubernetes.v1.HttpClientUtil

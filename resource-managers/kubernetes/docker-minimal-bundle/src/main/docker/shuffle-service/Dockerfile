@@ -36,4 +36,4 @@ ENV SPARK_HOME /opt/spark
 
 WORKDIR /opt/spark
 
-CMD ["/bin/sh","-c","nice -n 0 /opt/spark/bin/spark-class org.apache.spark.deploy.ExternalShuffleService 1"]
+CMD ["/bin/sh","-c","/opt/spark/bin/spark-class org.apache.spark.deploy.ExternalShuffleService 1"]

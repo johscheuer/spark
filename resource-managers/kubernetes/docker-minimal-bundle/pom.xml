@@ -84,19 +84,6 @@
               <tarLongFileMode>posix</tarLongFileMode>
             </configuration>
           </execution>
-          <execution>
-            <id>shuffle-docker-dist</id>
-            <phase>pre-integration-test</phase>
-            <goals>
-              <goal>single</goal>
-            </goals>
-            <configuration>
-              <descriptors>
-                <descriptor>src/main/assembly/shuffle-assembly.xml</descriptor>
-              </descriptors>
-              <tarLongFileMode>posix</tarLongFileMode>
-            </configuration>
-          </execution>
         </executions>
       </plugin>
     </plugins>

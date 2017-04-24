@@ -17,6 +17,9 @@ spec:
             path: '/tmp'
       containers:
         - name: shuffle
+          # This is an official image that is built
+          # from the dockerfiles/shuffle directory
+          # in the spark distribution.
           image: kubespark/spark-shuffle:pre-alpha.1
           volumeMounts:
             - mountPath: '/tmp'

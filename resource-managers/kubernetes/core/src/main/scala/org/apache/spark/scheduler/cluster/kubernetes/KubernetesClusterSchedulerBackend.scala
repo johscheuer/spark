@@ -56,7 +56,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
     .getOrElse(
       throw new SparkException("Must specify the driver pod name"))
 
-  case class ShuffleServiceConfig(shuffleNamespace: String,
+  case class ShuffleServiceConfig(
+    shuffleNamespace: String,
     shuffleLabels: Map[String, String],
     shuffleDirs: Seq[String])
 
@@ -227,48 +228,48 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
     val basePodBuilder = new PodBuilder()
       .withNewMetadata()
-      .withName(name)
-      .withLabels(selectors)
-      .withOwnerReferences()
-      .addNewOwnerReference()
-      .withController(true)
-      .withApiVersion(driverPod.getApiVersion)
-      .withKind(driverPod.getKind)
-      .withName(driverPod.getMetadata.getName)
-      .withUid(driverPod.getMetadata.getUid)
-      .endOwnerReference()
+        .withName(name)
+        .withLabels(selectors)
+        .withOwnerReferences()
+          .addNewOwnerReference()
+          .withController(true)
+          .withApiVersion(driverPod.getApiVersion)
+          .withKind(driverPod.getKind)
+          .withName(driverPod.getMetadata.getName)
+          .withUid(driverPod.getMetadata.getUid)
+        .endOwnerReference()
       .endMetadata()
       .withNewSpec()
-      .withHostname(hostname)
-      .addNewContainer()
-      .withName(s"executor")
-      .withImage(executorDockerImage)
-      .withImagePullPolicy("IfNotPresent")
-      .withNewResources()
-      .addToRequests("memory", executorMemoryQuantity)
-      .addToLimits("memory", executorMemoryLimitQuantity)
-      .addToRequests("cpu", executorCpuQuantity)
-      .addToLimits("cpu", executorCpuQuantity)
-      .endResources()
-      .withEnv(requiredEnv.asJava)
-      .withPorts(requiredPorts.asJava)
-      .endContainer()
+        .withHostname(hostname)
+        .addNewContainer()
+          .withName(s"executor")
+          .withImage(executorDockerImage)
+          .withImagePullPolicy("IfNotPresent")
+          .withNewResources()
+            .addToRequests("memory", executorMemoryQuantity)
+            .addToLimits("memory", executorMemoryLimitQuantity)
+            .addToRequests("cpu", executorCpuQuantity)
+            .addToLimits("cpu", executorCpuQuantity)
+          .endResources()
+          .withEnv(requiredEnv.asJava)
+          .withPorts(requiredPorts.asJava)
+        .endContainer()
       .endSpec()
 
     var resolvedPodBuilder = shuffleServiceConfig.map { config =>
       config.shuffleDirs.foldLeft(basePodBuilder) { (builder, dir) =>
         builder.editSpec()
           .addNewVolume()
-          .withName(FilenameUtils.getBaseName(dir))
-          .withNewHostPath().withPath(dir)
-          .endHostPath()
+            .withName(FilenameUtils.getBaseName(dir))
+            .withNewHostPath().withPath(dir)
+            .endHostPath()
           .endVolume()
           .editFirstContainer()
-          .addNewVolumeMount()
-          .withName(FilenameUtils.getBaseName(dir))
-          .withMountPath(dir)
-          .endVolumeMount()
-          .endContainer()
+            .addNewVolumeMount()
+            .withName(FilenameUtils.getBaseName(dir))
+            .withMountPath(dir)
+            .endVolumeMount()
+            .endContainer()
           .endSpec()
       }
     }.getOrElse(basePodBuilder)
@@ -299,8 +300,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
       var allPodsReady = true
       for (executorPod <- runningExecutorPods.values) {
         try {
-          val pod = kubernetesClient.pods().inNamespace(kubernetesNamespace).
-            withName(executorPod.getMetadata().getName()).get()
+          val pod = kubernetesClient.pods().inNamespace(kubernetesNamespace)
+            .withName(executorPod.getMetadata().getName()).get()
 
           allPodsReady &&= Readiness.isPodReady(pod)
         } catch {
@@ -365,8 +366,9 @@ private[spark] class KubernetesClusterSchedulerBackend(
 
                 colocatedPods match {
                   case Nil =>
-                    logError(s"Executor cannot find any ready shuffle pod.")
-                    throw new SparkException(s"Executor cannot find shuffle pod")
+                    logError(s"Cannot find co-located shuffle pod on node ${nodeName}")
+                    throw new SparkException(s"Cannot find co-located shuffle pod on node " +
+                      s"${nodeName}")
 
                   case shufflePod :: Nil =>
                     val shuffleIP = conf
@@ -374,14 +376,15 @@ private[spark] class KubernetesClusterSchedulerBackend(
                       .getOrElse(shufflePod.getStatus.getPodIP)
 
                     resolvedProperties = resolvedProperties ++ Seq(
-                      ("spark.shuffle.service.host", shuffleIP))
+                      (SPARK_SHUFFLE_SERVICE_HOST.key, shuffleIP))
 
-                  case x :: xs =>
+                  case _ =>
+                    val podsList = colocatedPods.map(_.getStatus.getPodIP).mkString(",")
                     logError(s"Ambiguous specification of shuffle service pod. " +
-                      s"Found multiple matching pods.")
+                      s"Found multiple matching pods: ${podsList}")
                     throw new SparkException(s"Ambiguous specification of shuffle service pod. " +
-                      s"Found multiple matching pods.")
-                  // TODO: name all the shuffle pods being selected.
+                      s"Found multiple matching pods: ${podsList}")
+
                 }
 
                 val reply = SparkAppConfig(resolvedProperties,
