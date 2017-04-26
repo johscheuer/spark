@@ -14,11 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.deploy.kubernetes.submit.v2
+package org.apache.spark.deploy.kubernetes
 
-import org.scalatest.BeforeAndAfter
-
-import org.apache.spark.SparkFunSuite
-
-class ClientV2Suite extends SparkFunSuite with BeforeAndAfter {
-}
+case class KubernetesCredentials(
+  oauthTokenBase64: Option[String],
+  caCertDataBase64: Option[String],
+  clientKeyDataBase64: Option[String],
+  clientCertDataBase64: Option[String])
