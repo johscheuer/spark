@@ -20,7 +20,8 @@ package org.apache.spark.deploy.kubernetes
 import org.apache.spark.SparkException
 
 object Util {
-  def parseKeyValuePairs(maybeKeyValues: Option[String],
+  def parseKeyValuePairs(
+    maybeKeyValues: Option[String],
     configKey: String,
     keyValueType: String): Map[String, String] = {
 

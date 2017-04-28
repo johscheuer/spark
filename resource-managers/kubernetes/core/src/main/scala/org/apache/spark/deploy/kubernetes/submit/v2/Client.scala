@@ -19,11 +19,13 @@ package org.apache.spark.deploy.kubernetes.submit.v2
 import java.io.File
 import java.util.Collections
 
-import io.fabric8.kubernetes.api.model.{ContainerBuilder, EnvVarBuilder, HasMetadata, OwnerReferenceBuilder, PodBuilder}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-import org.apache.spark.{SecurityManager => SparkSecurityManager, SparkConf, SparkException}
+import io.fabric8.kubernetes.api.model._
+
+import org.apache.spark.{SparkConf, SecurityManager => SparkSecurityManager}
+import org.apache.spark.deploy.kubernetes.Util
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
 import org.apache.spark.internal.Logging
@@ -31,26 +33,26 @@ import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.Utils
 
 /**
- * Submission client for launching Spark applications on Kubernetes clusters.
- *
- * This class is responsible for instantiating Kubernetes resources that allow a Spark driver to
- * run in a pod on the Kubernetes cluster with the Spark configurations specified by spark-submit.
- * Application submitters that desire to provide their application's dependencies from their local
- * disk must provide a resource staging server URI to this client so that the client can push the
- * local resources to the resource staging server and have the driver pod pull the resources in an
- * init-container. Interactions with the resource staging server are offloaded to the
- * {@link MountedDependencyManager} class. If instead the application submitter has their
- * dependencies pre-staged in remote locations like HDFS or their own HTTP servers already, then
- * the mounted dependency manager is bypassed entirely, but the init-container still needs to
- * fetch these remote dependencies (TODO https://github.com/apache-spark-on-k8s/spark/issues/238).
- */
+  * Submission client for launching Spark applications on Kubernetes clusters.
+  *
+  * This class is responsible for instantiating Kubernetes resources that allow a Spark driver to
+  * run in a pod on the Kubernetes cluster with the Spark configurations specified by spark-submit.
+  * Application submitters that desire to provide their application's dependencies from their local
+  * disk must provide a resource staging server URI to this client so that the client can push the
+  * local resources to the resource staging server and have the driver pod pull the resources in an
+  * init-container. Interactions with the resource staging server are offloaded to the
+  * {@link MountedDependencyManager} class. If instead the application submitter has their
+  * dependencies pre-staged in remote locations like HDFS or their own HTTP servers already, then
+  * the mounted dependency manager is bypassed entirely, but the init-container still needs to
+  * fetch these remote dependencies (TODO https://github.com/apache-spark-on-k8s/spark/issues/238).
+  */
 private[spark] class Client(
-    mainClass: String,
-    sparkConf: SparkConf,
-    appArgs: Array[String],
-    mainAppResource: String,
-    kubernetesClientProvider: SubmissionKubernetesClientProvider,
-    mountedDependencyManagerProvider: MountedDependencyManagerProvider) extends Logging {
+  mainClass: String,
+  sparkConf: SparkConf,
+  appArgs: Array[String],
+  mainAppResource: String,
+  kubernetesClientProvider: SubmissionKubernetesClientProvider,
+  mountedDependencyManagerProvider: MountedDependencyManagerProvider) extends Logging {
 
   private val namespace = sparkConf.get(KUBERNETES_NAMESPACE)
   private val master = resolveK8sMaster(sparkConf.get("spark.master"))
@@ -84,7 +86,7 @@ private[spark] class Client(
     org.apache.spark.internal.config.DRIVER_JAVA_OPTIONS)
 
   def run(): Unit = {
-    val parsedCustomLabels = parseKeyValuePairs(customLabels, KUBERNETES_DRIVER_LABELS.key,
+    val parsedCustomLabels = Util.parseKeyValuePairs(customLabels, KUBERNETES_DRIVER_LABELS.key,
       "labels")
     require(!parsedCustomLabels.contains(SPARK_APP_ID_LABEL), s"Label with key " +
       s" $SPARK_APP_ID_LABEL is not allowed as it is reserved for Spark bookkeeping operations.")
@@ -92,7 +94,7 @@ private[spark] class Client(
       s" $SPARK_APP_NAME_LABEL is not allowed as it is reserved for Spark bookkeeping operations.")
     val allLabels = parsedCustomLabels ++
       Map(SPARK_APP_ID_LABEL -> kubernetesAppId, SPARK_APP_NAME_LABEL -> appName)
-    val parsedCustomAnnotations = parseKeyValuePairs(
+    val parsedCustomAnnotations = Util.parseKeyValuePairs(
       customAnnotations,
       KUBERNETES_DRIVER_ANNOTATIONS.key,
       "annotations")
@@ -109,27 +111,27 @@ private[spark] class Client(
         .withImagePullPolicy("IfNotPresent")
         .addToEnv(driverExtraClasspathEnv.toSeq: _*)
         .addNewEnv()
-          .withName(ENV_DRIVER_MEMORY)
-          .withValue(driverContainerMemoryWithOverhead + "m")
-          .endEnv()
+        .withName(ENV_DRIVER_MEMORY)
+        .withValue(driverContainerMemoryWithOverhead + "m")
+        .endEnv()
         .addNewEnv()
-          .withName(ENV_DRIVER_MAIN_CLASS)
-          .withValue(mainClass)
-          .endEnv()
+        .withName(ENV_DRIVER_MAIN_CLASS)
+        .withValue(mainClass)
+        .endEnv()
         .addNewEnv()
-          .withName(ENV_DRIVER_ARGS)
-          .withValue(appArgs.mkString(" "))
-          .endEnv()
+        .withName(ENV_DRIVER_ARGS)
+        .withValue(appArgs.mkString(" "))
+        .endEnv()
         .build()
       val basePod = new PodBuilder()
         .withNewMetadata()
-          .withName(kubernetesAppId)
-          .addToLabels(allLabels.asJava)
-          .addToAnnotations(parsedCustomAnnotations.asJava)
-          .endMetadata()
+        .withName(kubernetesAppId)
+        .addToLabels(allLabels.asJava)
+        .addToAnnotations(parsedCustomAnnotations.asJava)
+        .endMetadata()
         .withNewSpec()
-          .addToContainers(driverContainer)
-          .endSpec()
+        .addToContainers(driverContainer)
+        .endSpec()
 
       val nonDriverPodKubernetesResources = mutable.Buffer[HasMetadata]()
       val resolvedJars = mutable.Buffer[String]()
@@ -192,19 +194,19 @@ private[spark] class Client(
         scheme == "local" || scheme == "file"
       }.map(_.getPath).mkString(File.pathSeparator)
       val resolvedDriverJavaOpts = resolvedSparkConf.getAll.map { case (confKey, confValue) =>
-          s"-D$confKey=$confValue"
+        s"-D$confKey=$confValue"
       }.mkString(" ") + driverJavaOptions.map(" " + _).getOrElse("")
       val resolvedDriverPod = driverPodWithMountedDeps.editSpec()
         .editMatchingContainer(new ContainerNameEqualityPredicate(driverContainer.getName))
-          .addNewEnv()
-            .withName(ENV_MOUNTED_CLASSPATH)
-            .withValue(mountedClassPath)
-            .endEnv()
-          .addNewEnv()
-            .withName(ENV_DRIVER_JAVA_OPTS)
-            .withValue(resolvedDriverJavaOpts)
-            .endEnv()
-          .endContainer()
+        .addNewEnv()
+        .withName(ENV_MOUNTED_CLASSPATH)
+        .withValue(mountedClassPath)
+        .endEnv()
+        .addNewEnv()
+        .withName(ENV_DRIVER_JAVA_OPTS)
+        .withValue(resolvedDriverJavaOpts)
+        .endEnv()
+        .endContainer()
         .endSpec()
         .build()
       val createdDriverPod = kubernetesClient.pods().create(resolvedDriverPod)
@@ -227,23 +229,5 @@ private[spark] class Client(
           throw e
       }
     }
-  }
-
-  private def parseKeyValuePairs(
-      maybeKeyValues: Option[String],
-      configKey: String,
-      keyValueType: String): Map[String, String] = {
-    maybeKeyValues.map(keyValues => {
-      keyValues.split(",").map(_.trim).filterNot(_.isEmpty).map(keyValue => {
-        keyValue.split("=", 2).toSeq match {
-          case Seq(k, v) =>
-            (k, v)
-          case _ =>
-            throw new SparkException(s"Custom $keyValueType set by $configKey must be a" +
-              s" comma-separated list of key-value pairs, with format <key>=<value>." +
-              s" Got value: $keyValue. All values: $keyValues")
-        }
-      }).toMap
-    }).getOrElse(Map.empty[String, String])
   }
 }
