@@ -24,7 +24,7 @@ import scala.collection.mutable
 
 import io.fabric8.kubernetes.api.model._
 
-import org.apache.spark.{SparkConf, SecurityManager => SparkSecurityManager}
+import org.apache.spark.SparkConf
 import org.apache.spark.deploy.kubernetes.Util
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
@@ -33,26 +33,26 @@ import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.Utils
 
 /**
-  * Submission client for launching Spark applications on Kubernetes clusters.
-  *
-  * This class is responsible for instantiating Kubernetes resources that allow a Spark driver to
-  * run in a pod on the Kubernetes cluster with the Spark configurations specified by spark-submit.
-  * Application submitters that desire to provide their application's dependencies from their local
-  * disk must provide a resource staging server URI to this client so that the client can push the
-  * local resources to the resource staging server and have the driver pod pull the resources in an
-  * init-container. Interactions with the resource staging server are offloaded to the
-  * {@link MountedDependencyManager} class. If instead the application submitter has their
-  * dependencies pre-staged in remote locations like HDFS or their own HTTP servers already, then
-  * the mounted dependency manager is bypassed entirely, but the init-container still needs to
-  * fetch these remote dependencies (TODO https://github.com/apache-spark-on-k8s/spark/issues/238).
-  */
+ * Submission client for launching Spark applications on Kubernetes clusters.
+ *
+ * This class is responsible for instantiating Kubernetes resources that allow a Spark driver to
+ * run in a pod on the Kubernetes cluster with the Spark configurations specified by spark-submit.
+ * Application submitters that desire to provide their application's dependencies from their local
+ * disk must provide a resource staging server URI to this client so that the client can push the
+ * local resources to the resource staging server and have the driver pod pull the resources in an
+ * init-container. Interactions with the resource staging server are offloaded to the
+ * {@link MountedDependencyManager} class. If instead the application submitter has their
+ * dependencies pre-staged in remote locations like HDFS or their own HTTP servers already, then
+ * the mounted dependency manager is bypassed entirely, but the init-container still needs to
+ * fetch these remote dependencies (TODO https://github.com/apache-spark-on-k8s/spark/issues/238).
+ */
 private[spark] class Client(
-  mainClass: String,
-  sparkConf: SparkConf,
-  appArgs: Array[String],
-  mainAppResource: String,
-  kubernetesClientProvider: SubmissionKubernetesClientProvider,
-  mountedDependencyManagerProvider: MountedDependencyManagerProvider) extends Logging {
+    mainClass: String,
+    sparkConf: SparkConf,
+    appArgs: Array[String],
+    mainAppResource: String,
+    kubernetesClientProvider: SubmissionKubernetesClientProvider,
+    mountedDependencyManagerProvider: MountedDependencyManagerProvider) extends Logging {
 
   private val namespace = sparkConf.get(KUBERNETES_NAMESPACE)
   private val master = resolveK8sMaster(sparkConf.get("spark.master"))
@@ -111,26 +111,26 @@ private[spark] class Client(
         .withImagePullPolicy("IfNotPresent")
         .addToEnv(driverExtraClasspathEnv.toSeq: _*)
         .addNewEnv()
-        .withName(ENV_DRIVER_MEMORY)
-        .withValue(driverContainerMemoryWithOverhead + "m")
+          .withName(ENV_DRIVER_MEMORY)
+          .withValue(driverContainerMemoryWithOverhead + "m")
         .endEnv()
         .addNewEnv()
-        .withName(ENV_DRIVER_MAIN_CLASS)
-        .withValue(mainClass)
+          .withName(ENV_DRIVER_MAIN_CLASS)
+          .withValue(mainClass)
         .endEnv()
         .addNewEnv()
-        .withName(ENV_DRIVER_ARGS)
-        .withValue(appArgs.mkString(" "))
+          .withName(ENV_DRIVER_ARGS)
+          .withValue(appArgs.mkString(" "))
         .endEnv()
         .build()
       val basePod = new PodBuilder()
         .withNewMetadata()
-        .withName(kubernetesAppId)
-        .addToLabels(allLabels.asJava)
-        .addToAnnotations(parsedCustomAnnotations.asJava)
+          .withName(kubernetesAppId)
+          .addToLabels(allLabels.asJava)
+          .addToAnnotations(parsedCustomAnnotations.asJava)
         .endMetadata()
         .withNewSpec()
-        .addToContainers(driverContainer)
+          .addToContainers(driverContainer)
         .endSpec()
 
       val nonDriverPodKubernetesResources = mutable.Buffer[HasMetadata]()

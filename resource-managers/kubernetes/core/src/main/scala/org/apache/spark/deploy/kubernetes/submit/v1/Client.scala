@@ -21,19 +21,21 @@ import java.security.SecureRandom
 import java.util.ServiceLoader
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
+import scala.collection.JavaConverters._
+
 import com.google.common.io.Files
 import com.google.common.util.concurrent.SettableFuture
 import io.fabric8.kubernetes.api.model._
-import io.fabric8.kubernetes.client.{DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher, ConfigBuilder => K8SConfigBuilder}
+import io.fabric8.kubernetes.client.{ConfigBuilder => K8SConfigBuilder}
+import io.fabric8.kubernetes.client.{DefaultKubernetesClient, KubernetesClient, KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
 import org.apache.commons.codec.binary.Base64
-import scala.collection.JavaConverters._
 
 import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.deploy.kubernetes.{CompressionUtils, Util}
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
-import org.apache.spark.deploy.rest.kubernetes.v1.{AppResource, ContainerAppResource, HttpClientUtil, KubernetesCreateSubmissionRequest, KubernetesCredentials, KubernetesFileUtils, KubernetesSparkRestApi, RemoteAppResource, UploadedAppResource}
+import org.apache.spark.deploy.rest.kubernetes.v1._
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.{ShutdownHookManager, Utils}
 
