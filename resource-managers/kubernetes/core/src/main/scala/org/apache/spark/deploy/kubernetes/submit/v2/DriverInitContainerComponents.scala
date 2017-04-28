@@ -95,6 +95,7 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
   override def provideExecutorInitContainerConfiguration(): ExecutorInitContainerConfiguration = {
     new ExecutorInitContainerConfigurationImpl(
         maybeSecretName,
+        INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH,
         configMapName,
         configMapKey)
   }

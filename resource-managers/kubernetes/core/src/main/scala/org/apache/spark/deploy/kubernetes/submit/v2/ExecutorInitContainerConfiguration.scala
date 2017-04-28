@@ -18,7 +18,6 @@ package org.apache.spark.deploy.kubernetes.submit.v2
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.kubernetes.config._
-import org.apache.spark.deploy.kubernetes.constants._
 
 private[spark] trait ExecutorInitContainerConfiguration {
   /**
@@ -30,6 +29,7 @@ private[spark] trait ExecutorInitContainerConfiguration {
 
 private[spark] class ExecutorInitContainerConfigurationImpl(
     initContainerSecretName: Option[String],
+    initContainerSecretMountDir: String,
     initContainerConfigMapName: String,
     initContainerConfigMapKey: String)
     extends ExecutorInitContainerConfiguration {
@@ -39,7 +39,7 @@ private[spark] class ExecutorInitContainerConfigurationImpl(
         initContainerConfigMapName)
       .set(EXECUTOR_INIT_CONTAINER_CONFIG_MAP_KEY,
         initContainerConfigMapKey)
-      .set(EXECUTOR_INIT_CONTAINER_SECRET_MOUNT_DIR, INIT_CONTAINER_SECRET_VOLUME_MOUNT_PATH)
+      .set(EXECUTOR_INIT_CONTAINER_SECRET_MOUNT_DIR, initContainerSecretMountDir)
     initContainerSecretName.map { secret =>
       configuredSparkConf.set(EXECUTOR_INIT_CONTAINER_SECRET, secret)
     }.getOrElse(configuredSparkConf)
