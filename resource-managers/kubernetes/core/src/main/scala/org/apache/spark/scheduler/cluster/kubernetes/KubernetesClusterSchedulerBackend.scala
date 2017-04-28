@@ -17,11 +17,14 @@
 package org.apache.spark.scheduler.cluster.kubernetes
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
+import java.util.concurrent.{Executors, TimeUnit}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
 import io.fabric8.kubernetes.api.model._
+import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientException, Watcher}
+import io.fabric8.kubernetes.client.Watcher.Action
 import io.fabric8.kubernetes.client.internal.readiness.Readiness
 import org.apache.commons.io.FilenameUtils
 
@@ -29,6 +32,7 @@ import org.apache.spark.{SparkContext, SparkEnv, SparkException}
 import org.apache.spark.deploy.kubernetes.Util
 import org.apache.spark.deploy.kubernetes.config._
 import org.apache.spark.deploy.kubernetes.constants._
+import org.apache.spark.internal.Logging
 import org.apache.spark.rpc._
 import org.apache.spark.scheduler.TaskSchedulerImpl
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RetrieveSparkAppConfig, SparkAppConfig}
@@ -55,6 +59,19 @@ private[spark] class KubernetesClusterSchedulerBackend(
     .get(KUBERNETES_DRIVER_POD_NAME)
     .getOrElse(
       throw new SparkException("Must specify the driver pod name"))
+
+  /**
+    * The total number of executors we aim to have.
+    * Undefined when not using dynamic allocation.
+    * Initially set to 0 when using dynamic allocation
+    */
+  private var executorLimitOption: Option[Int] = {
+    if (Utils.isDynamicAllocationEnabled(conf)) {
+      Some(0)
+    } else {
+      None
+    }
+  }
 
   case class ShuffleServiceConfig(
     shuffleNamespace: String,
@@ -128,6 +145,8 @@ private[spark] class KubernetesClusterSchedulerBackend(
     CoarseGrainedSchedulerBackend.ENDPOINT_NAME).toString
 
   private val initialExecutors = getInitialTargetExecutorNumber(1)
+  private val allocator = new KubernetesAllocator(kubernetesClient,
+      10, KubernetesClusterSchedulerBackend.this)
 
   private def getInitialTargetExecutorNumber(defaultNumExecutors: Int = 1): Int = {
     if (Utils.isDynamicAllocationEnabled(conf)) {
@@ -153,7 +172,7 @@ private[spark] class KubernetesClusterSchedulerBackend(
   override def start(): Unit = {
     super.start()
     if (!Utils.isDynamicAllocationEnabled(sc.conf)) {
-      doRequestTotalExecutors(initialExecutors)
+      allocateInitialExecutors(initialExecutors)
     }
   }
 
@@ -283,36 +302,13 @@ private[spark] class KubernetesClusterSchedulerBackend(
     }
   }
 
-  override def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] =
-    Future[Boolean] {
-      EXECUTOR_MODIFICATION_LOCK.synchronized {
-        if (requestedTotal > totalExpectedExecutors.get) {
-          logInfo(s"Requesting ${requestedTotal - totalExpectedExecutors.get}"
-            + s" additional executors, expecting total $requestedTotal and currently" +
-            s" expected ${totalExpectedExecutors.get}")
-          for (i <- 0 until (requestedTotal - totalExpectedExecutors.get)) {
-            runningExecutorPods += allocateNewExecutorPod()
-          }
-        }
-        totalExpectedExecutors.set(requestedTotal)
-      }
-
-      var allPodsReady = true
-      for (executorPod <- runningExecutorPods.values) {
-        try {
-          val pod = kubernetesClient.pods().inNamespace(kubernetesNamespace)
-            .withName(executorPod.getMetadata().getName()).get()
-
-          allPodsReady &&= Readiness.isPodReady(pod)
-        } catch {
-          case throwable: Throwable =>
-            logWarning(s"Executor no longer exists.", throwable)
-            allPodsReady = false
-        }
-      }
-
-      allPodsReady
-    }
+  override def doRequestTotalExecutors(requestedTotal: Int): Future[Boolean] = Future.successful {
+    // We simply set the limit as an advisory maximum value. We do not know if we can
+    // actually allocate this number of executors.
+    logInfo("Capping the total amount of executors to " + requestedTotal)
+    executorLimitOption = Some(requestedTotal)
+    true
+  }
 
   override def doKillExecutors(executorIds: Seq[String]): Future[Boolean] = Future[Boolean] {
     EXECUTOR_MODIFICATION_LOCK.synchronized {
@@ -324,6 +320,20 @@ private[spark] class KubernetesClusterSchedulerBackend(
       }
     }
     true
+  }
+
+  private def allocateInitialExecutors(requestedTotal: Integer): Unit = {
+      EXECUTOR_MODIFICATION_LOCK.synchronized {
+        if (requestedTotal > totalExpectedExecutors.get) {
+          logInfo(s"Requesting ${requestedTotal - totalExpectedExecutors.get}"
+            + s" additional executors, expecting total $requestedTotal and currently" +
+            s" expected ${totalExpectedExecutors.get}")
+          for (i <- 0 until (requestedTotal - totalExpectedExecutors.get)) {
+            runningExecutorPods += allocateNewExecutorPod()
+          }
+        }
+        totalExpectedExecutors.set(requestedTotal)
+      }
   }
 
   override def createDriverEndpoint(properties: Seq[(String, String)]): DriverEndpoint = {
@@ -396,6 +406,64 @@ private[spark] class KubernetesClusterSchedulerBackend(
       }.orElse(super.receiveAndReply(context))
     }
   }
+
+  /*
+ * KubernetesAllocator class watches all the executor pods associated with
+ * this SparkJob and creates new executors when it is appropriate.
+ */
+  private[spark] class KubernetesAllocator(
+    client: KubernetesClient,
+    interval: Int,
+    backend: KubernetesClusterSchedulerBackend) extends Logging {
+
+    private val scheduler = Executors.newScheduledThreadPool(1)
+    private val allocatorRunnable: Runnable = new Runnable {
+      override def run(): Unit = {
+        if (readyExecutorPods.size < totalExpectedExecutors.get * minRegisteredRatio) {
+          logInfo("Waiting for pending executors before scaling")
+          return
+        }
+
+        if (runningExecutorPods.size >= executorLimitOption.get) {
+          logInfo("Maximum allowed executor limit reached. Not scaling up further.")
+          return
+        }
+
+        EXECUTOR_MODIFICATION_LOCK.synchronized {
+          runningExecutorPods += allocateNewExecutorPod()
+          totalExpectedExecutors.set(runningExecutorPods.size)
+          logInfo(s"Requesting a new executor, total executors is now ${totalExpectedExecutors}")
+        }
+      }
+    }
+    if (interval > 0) {
+      scheduler.scheduleWithFixedDelay(allocatorRunnable, 0, interval, TimeUnit.SECONDS)
+    }
+
+    // This is a set of all ready executor pods.
+    private var readyExecutorPods = Set[String]()
+
+    client
+      .pods()
+      .withLabels(Map(SPARK_APP_ID_LABEL -> applicationId()).asJava)
+      .watch(ExecutorPodWatcher)
+
+    private[spark] object ExecutorPodWatcher extends Watcher[Pod] with Logging {
+      override def eventReceived(action: Watcher.Action, p: Pod): Unit = {
+        action match {
+          case Action.DELETED =>
+            readyExecutorPods -= p.getMetadata.getName
+
+          case _ =>
+            if (Readiness.isReady(p)) {
+              readyExecutorPods += p.getMetadata.getName
+            }
+        }
+      }
+      override def onClose(e: KubernetesClientException): Unit = {}
+    }
+  }
+
 
 }
 

@@ -28,6 +28,7 @@ import io.fabric8.kubernetes.api.model.Pod
 import io.fabric8.kubernetes.api.model.extensions.DaemonSet
 import io.fabric8.kubernetes.client.{KubernetesClientException, Watcher}
 import io.fabric8.kubernetes.client.Watcher.Action
+import io.fabric8.kubernetes.client.internal.readiness.Readiness
 import org.scalatest.{BeforeAndAfter, DoNotDiscover}
 import org.scalatest.concurrent.Eventually
 
@@ -99,8 +100,7 @@ private[spark] class KubernetesV1Suite(testBackend: IntegrationTestBackend)
       val pods = kubernetesTestComponents.kubernetesClient.pods()
         .withLabel("app", "spark-shuffle-service").list().getItems()
 
-      if (pods.size() == 0 || pods.get(0).getStatus.getConditions.asScala
-        .toList.exists(cond => cond.getType == "Ready" && cond.getStatus != "True")) {
+      if (pods.size() == 0 || Readiness.isReady(pods.get(0))) {
         throw KubernetesSuite.ShuffleNotReadyException()
       }
     }
@@ -152,10 +152,10 @@ private[spark] class KubernetesV1Suite(testBackend: IntegrationTestBackend)
     }
     Eventually.eventually(KubernetesSuite.TIMEOUT, KubernetesSuite.INTERVAL) {
       val result = sparkMetricsService.getExecutors(apps.head.id)
-      assert(result.size == 4)
-      assert(result.count(exec => exec.id != "driver") == 3)
+      assert(result.size == 3)
       result
     }
+
     Eventually.eventually(KubernetesSuite.TIMEOUT, KubernetesSuite.INTERVAL) {
       val result = sparkMetricsService.getStages(
         apps.head.id, Seq(StageStatus.COMPLETE).asJava)
@@ -368,8 +368,11 @@ private[spark] class KubernetesV1Suite(testBackend: IntegrationTestBackend)
   test("Dynamic executor scaling basic test") {
     createShuffleServiceDaemonSet()
 
+    sparkConf.setJars(Seq(KubernetesSuite.CONTAINER_LOCAL_HELPER_JAR_PATH))
     sparkConf.set("spark.dynamicAllocation.enabled", "true")
     sparkConf.set("spark.shuffle.service.enabled", "true")
+    sparkConf.set("spark.kubernetes.shuffle.labels", "app=spark-shuffle-service")
+    sparkConf.set("spark.kubernetes.shuffle.namespace", kubernetesTestComponents.namespace)
     sparkConf.set("spark.dynamicAllocation.maxExecutors", "3")
     sparkConf.set("spark.app.name", "group-by-test")
 
@@ -378,7 +381,7 @@ private[spark] class KubernetesV1Suite(testBackend: IntegrationTestBackend)
       mainClass = KubernetesSuite.GROUP_BY_MAIN_CLASS,
       mainAppResource = KubernetesSuite.SUBMITTER_LOCAL_MAIN_APP_RESOURCE,
       appArgs = Array.empty[String]).run()
-    val sparkMetricsService = getSparkMetricsService("spark-pi")
+    val sparkMetricsService = getSparkMetricsService("group-by-test")
     expectationsForDynamicAllocation(sparkMetricsService)
   }
 
