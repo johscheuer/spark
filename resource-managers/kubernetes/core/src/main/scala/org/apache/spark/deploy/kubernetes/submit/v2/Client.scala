@@ -135,9 +135,6 @@ private[spark] class Client(
       val podWithInitContainer = initContainerBootstrap.bootstrapInitContainerAndVolumes(
           driverContainer.getName, basePod)
 
-      val nonDriverPodKubernetesResources = Seq(initContainerConfigMap.configMap) ++
-        maybeSubmittedDependenciesSecret.toSeq
-
       val containerLocalizedFilesResolver = initContainerComponentsProvider
           .provideContainerLocalizedFilesResolver()
       val resolvedSparkJars = containerLocalizedFilesResolver.resolveSubmittedSparkJars()
@@ -190,6 +187,9 @@ private[spark] class Client(
         .build()
       val createdDriverPod = kubernetesClient.pods().create(resolvedDriverPod)
       try {
+        val nonDriverPodKubernetesResources = Seq(initContainerConfigMap.configMap) ++
+          maybeSubmittedDependenciesSecret.toSeq ++
+          credentialsSecret.toSeq
         val driverPodOwnerReference = new OwnerReferenceBuilder()
           .withName(createdDriverPod.getMetadata.getName)
           .withApiVersion(createdDriverPod.getApiVersion)
