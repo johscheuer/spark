@@ -27,7 +27,7 @@ import org.apache.spark.deploy.rest.kubernetes.v2.RetrofitClientFactoryImpl
  * driver's init-container. This is all wrapped in the same place to ensure that related
  * components are being constructed with consistent configurations with respect to one another.
  */
-private[spark] trait DriverInitContainerComponents {
+private[spark] trait DriverInitContainerComponentsProvider {
 
   def provideInitContainerConfigMapBuilder(
       maybeJarsResourceId: Option[String], maybeFilesResourceId: Option[String])
@@ -47,7 +47,7 @@ private[spark] class DriverInitContainerComponentsProviderImpl(
     kubernetesAppId: String,
     sparkJars: Seq[String],
     sparkFiles: Seq[String])
-    extends DriverInitContainerComponents {
+    extends DriverInitContainerComponentsProvider {
 
   private val maybeResourceStagingServerUri = sparkConf.get(RESOURCE_STAGING_SERVER_URI)
   private val resourceStagingServerSslOptions = new SecurityManager(sparkConf)

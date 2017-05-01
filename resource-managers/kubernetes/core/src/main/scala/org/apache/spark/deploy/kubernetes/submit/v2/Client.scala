@@ -49,7 +49,7 @@ private[spark] class Client(
     sparkJars: Seq[String],
     sparkFiles: Seq[String],
     kubernetesClientProvider: SubmissionKubernetesClientProvider,
-    initContainerComponentsProvider: DriverInitContainerComponents,
+    initContainerComponentsProvider: DriverInitContainerComponentsProvider,
     kubernetesCredentialsMounterProvider: DriverPodKubernetesCredentialsMounterProvider)
     extends Logging {
 
