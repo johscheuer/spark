@@ -81,6 +81,20 @@ private[spark] object PemsToKeyStoreConverter {
     trustStore
   }
 
+  def convertCertPemToTempTrustStoreFile(
+      certPemFile: File,
+      trustStorePassword: Option[String],
+      trustStoreType: Option[String]): File = {
+    val trustStore = convertCertPemToTrustStore(certPemFile, trustStoreType)
+    val tempTrustStoreDir = Utils.createTempDir("resource-staging-server-truststore")
+    val tempTrustStoreFile = new File(tempTrustStoreDir,
+      s"trustStore.${trustStoreType.getOrElse(KeyStore.getDefaultType)}")
+    Utils.tryWithResource(new FileOutputStream(tempTrustStoreFile)) {
+      trustStore.store(_, trustStorePassword.map(_.toCharArray).orNull)
+    }
+    tempTrustStoreFile
+  }
+
   private def withPemParsedFromFile[T](pemFile: File)(f: (PEMParser => T)): T = {
     Utils.tryWithResource(new FileInputStream(pemFile)) { pemStream =>
       Utils.tryWithResource(new InputStreamReader(pemStream, Charsets.UTF_8)) { pemReader =>
