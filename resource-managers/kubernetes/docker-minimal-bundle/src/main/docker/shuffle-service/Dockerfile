@@ -23,4 +23,4 @@ FROM spark-base
 
 COPY examples /opt/spark/examples
 
-ENTRYPOINT [ "/sbin/tini", "--", "bin/spark-class", "org.apache.spark.deploy.ExternalShuffleService", "1" ]
+ENTRYPOINT [ "/sbin/tini", "--", "bin/spark-class", "org.apache.spark.deploy.kubernetes.KubernetesExternalShuffleService", "1" ]
