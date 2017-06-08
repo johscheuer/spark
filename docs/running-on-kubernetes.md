@@ -65,6 +65,8 @@ For example, if the registry host is `registry-host` and the registry is listeni
     docker push registry-host:5000/spark-driver:latest
     docker push registry-host:5000/spark-executor:latest
     docker push registry-host:5000/spark-init:latest
+    
+Note that `spark-base` is the base image for the other images.  It must be built first before the other images, and then afterwards the other images can be built in any order.
 
 ## Submitting Applications to Kubernetes
 
